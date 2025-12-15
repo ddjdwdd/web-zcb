@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>web-zcb (Native MHR Support)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js"></script>
+    
+    <style>
+        /* THEME: ZCB Live (Dark Grey + Cyan Accent) */
+        :root {
+            --bg-color: #121212;         /* Dark background behind window */
+            --window-bg: #1f1f1f;        /* The main window color */
+            --input-bg: #2b2b2b;         /* Darker input background */
+            --border-color: #383838;     /* Subtle borders */
+            --text-main: #eeeeee;        /* Main text */
+            --text-muted: #aaaaaa;       /* Help text */
+            --accent: #00bcd4;           /* ZCB Cyan Blue */
+            --accent-hover: #26c6da;
+        }
+
+        body { 
+            font-family: 'Segoe UI', 'Roboto', sans-serif; 
+            background: var(--bg-color); 
+            color: var(--text-main); 
+            margin: 0;
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh;
+            justify-content: center;
+        }
+        
+        .container { 
+            background: var(--window-bg); 
+            padding: 25px; 
+            border-radius: 8px; 
+            width: 100%; 
+            max-width: 420px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            border: 1px solid var(--border-color); 
+            box-sizing: border-box;
+        }
+
+        h2 { 
+            margin-top: 0; 
+            margin-bottom: 20px;
+            text-align: left;
+            color: var(--text-main); 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: '▼';
+            font-size: 0.6em;
+            margin-right: 10px;
+            color: var(--text-muted);
+        }
+        
+        .section { margin-bottom: 20px; }
+        
+        label { 
+            display: block; 
+            margin-bottom: 6px; 
+            font-weight: 500; 
+            font-size: 0.85em; 
+            color: var(--text-muted); 
+        }
+        
+        input[type="file"], input[type="number"] { 
+            width: 100%; 
+            margin-bottom: 8px; 
+            background: var(--input-bg); 
+            color: white; 
+            border: 1px solid var(--border-color); 
+            padding: 8px 12px; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            outline: none; 
+            font-size: 13px;
+            transition: border-color 0.2s;
+        }
+        
+        input[type="file"] { font-size: 12px; }
+        input[type="file"]::file-selector-button {
+            background: #383838;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        input:focus { border-color: var(--accent); }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+            -webkit-appearance: none;
+            background: var(--input-bg);
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        button { 
+            width: 100%; 
+            padding: 12px; 
+            background: var(--accent); 
+            color: #1a1a1a;
+            font-weight: 700; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 14px; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            margin-top: 15px;
+            transition: 0.2s;
+        }
+        button:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            background: var(--input-bg);
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+        }
+        
+        input[type="checkbox"] {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 3px;
+            margin: 0 10px 0 0;
+            cursor: pointer;
+            position: relative;
+        }
+        input[type="checkbox"]:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            color: #000;
+            font-size: 12px;
+            left: 2px;
+            top: -1px;
+            font-weight: bold;
+        }
+
+        #progressContainer { width: 100%; background-color: var(--input-bg); border-radius: 2px; height: 6px; margin-top: 15px; overflow: hidden; display: none; }
+        #progressBar { width: 0%; height: 100%; background-color: var(--accent); transition: width 0.1s linear; }
+        
+        #status { margin-top: 10px; text-align: center; font-size: 0.8em; color: var(--text-muted); font-family: monospace; }
+        .help-text { font-size: 0.75em; color: #777; margin-top: -4px; margin-bottom: 8px;}
+        
+        .val-display { float: right; color: var(--accent); font-size: 0.9em; font-weight: bold; }
+        
+        a { color: var(--accent); text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>web-zcb</h2>
+    
+    <div class="section">
+        <label>Clickpack (.zip)</label>
+        <input type="file" id="zipFile" accept=".zip">
+        <div class="help-text" id="clickCount">No pack loaded</div>
+    </div>
+
+    <div class="section">
+        <label>Macro (.mhr, .gdr, .json, .txt)</label>
+        <input type="file" id="macroFile" accept=".mhr,.json,.txt,.gdr">
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <div style="flex: 1;">
+                <label>FPS</label>
+                <input type="number" id="fps" value="240">
+            </div>
+            <div style="flex: 1;">
+                 </div>
+        </div>
+    </div>
+
+    <div class="section" style="border-bottom: none; margin-bottom: 0;">
+        <label>Configuration</label>
+        
+        <div style="margin-top: 10px;">
+            <label style="display:inline;">Pitch Variation</label>
+            <span id="pitchVal" class="val-display">5%</span>
+            <input type="range" id="pitchVar" min="0" max="50" value="5">
+        </div>
+
+        <div style="margin-top: 5px;">
+            <label style="display:inline;">Release Volume</label>
+            <span id="relVal" class="val-display">50%</span>
+            <input type="range" id="releaseVolume" min="0" max="100" value="50">
+        </div>
+
+        <div class="checkbox-container">
+            <input type="checkbox" id="disableReleases">
+            <label for="disableReleases" style="margin:0; color: var(--text-main); font-weight: normal; cursor: pointer;">Disable Releases</label>
+        </div>
+    </div>
+
+    <button id="renderBtn">Render Audio</button>
+    
+    <div id="progressContainer"><div id="progressBar"></div></div>
+    <div id="status">Ready</div>
+</div>
+
+<script>
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let clickSounds = [], softClickSounds = [], releaseSounds = [], softReleaseSounds = [];
+    let macroData = null;
+    let outputFileName = "clickbot_render"; 
+    const MICRO_CLICK_THRESHOLD = 6;
+    const SILENCE_THRESHOLD = 0.001;
+
+    // UI Helpers
+    document.getElementById('releaseVolume').addEventListener('input', (e) => document.getElementById('relVal').innerText = e.target.value + '%');
+    document.getElementById('pitchVar').addEventListener('input', (e) => document.getElementById('pitchVal').innerText = e.target.value + '%');
+
+    function updateProgress(percent, msg) {
+        const bar = document.getElementById('progressBar');
+        const con = document.getElementById('progressContainer');
+        const stat = document.getElementById('status');
+        con.style.display = 'block';
+        bar.style.width = percent + '%';
+        if (msg) stat.innerText = msg;
+    }
+
+    function trimSilence(buffer) {
+        if (!buffer || buffer.length === 0) return buffer;
+        let start = 0, end = buffer.length;
+        for (let i = 0; i < buffer.length; i++) { if (Math.abs(buffer[i]) > SILENCE_THRESHOLD) { start = i; break; } }
+        for (let i = buffer.length - 1; i >= 0; i--) { if (Math.abs(buffer[i]) > SILENCE_THRESHOLD) { end = i + 1; break; } }
+        start = Math.max(0, start - 10); end = Math.min(buffer.length, end + 10);
+        return (end <= start) ? new Float32Array(0) : buffer.slice(start, end);
+    }
+
+    // --- MHR PARSER ---
+    function parseMHR(buffer) {
+        try {
+            // MHR files are GZIP compressed. First 4 bytes are size (often ignored in JS extractors), then data.
+            // We'll try to gunzip the whole buffer.
+            const inflated = pako.inflate(new Uint8Array(buffer));
+            const view = new DataView(inflated.buffer);
+            
+            // Check magic "HACKPRO" (Mega Hack usually starts with this signature in older versions, 
+            // but MHR binary format is: [FPS (double)] [Actions Count (int)] [Actions Array...])
+            // Actually, recent MHR/FHR formats might be simple binary dumps.
+            // Let's assume standard MHR binary structure:
+            // 0x00: FPS (Double - 8 bytes) or Float (4 bytes)? Usually Double.
+            // But sometimes it's JSON inside GZIP.
+            
+            // Try Text Decode first (for JSON MHR)
+            const textDec = new TextDecoder("utf-8").decode(inflated);
+            if (textDec.startsWith('{') || textDec.startsWith('[')) {
+                // It's JSON!
+                const json = JSON.parse(textDec);
+                const fps = json.meta?.fps || json.fps || 240;
+                const events = json.events || [];
+                const actions = events.map(e => ({ f: e.frame || e.f, state: (e.down || e.d) ? 1 : 0 }));
+                return { fps, actions };
+            }
+
+            // Binary Parsing
+            // Offset 0: FPS (Float32 or Double64)
+            // Let's try Double first
+            let fps = view.getFloat64(0, true); // Little endian
+            let offset = 8;
+            
+            // If FPS looks wrong (e.g. huge or tiny), try Float32
+            if (fps < 1 || fps > 10000) {
+                fps = view.getFloat32(0, true);
+                offset = 4;
+            }
+
+            // Next 4 bytes: Number of actions (Int32)
+            // NOTE: Some formats might skip this. Let's heuristically check.
+            // We'll just read until EOF if count seems wrong.
+            // Assuming simplified format: [Frame (Float/Double)][Hold (Bool/Byte)]...
+            
+            // Actually common .mhr format:
+            // Header (variable)
+            // But let's look for the standard "Echo" or "Tasbot" style binary if it's not JSON.
+            // Given the complexity, let's look for the "meta" object if it was a text file disguised as binary.
+            // If binary, it's often: [Frame (float)][State (bool)]
+            
+            const actions = [];
+            const len = inflated.byteLength;
+            // Heuristic loop
+            while(offset < len) {
+                // Frame is usually 4 bytes (Float) or 8 bytes (Double)
+                // Let's assume Float for frame, and 1 byte for state
+                if (offset + 5 > len) break;
+                
+                const frame = view.getFloat32(offset, true);
+                const stateByte = view.getUint8(offset + 4);
+                // State: 1 = down, 0 = up
+                const down = (stateByte & 1) === 1; 
+                
+                actions.push({ f: frame, state: down ? 1 : 0 });
+                offset += 5; 
+            }
+            
+            return { fps, actions };
+
+        } catch (e) {
+            console.error("MHR Parse Error:", e);
+            throw new Error("Invalid or unsupported MHR file");
+        }
+    }
+
+    document.getElementById('zipFile').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        clickSounds = []; softClickSounds = []; releaseSounds = []; softReleaseSounds = [];
+        updateProgress(0, "Scanning ZIP...");
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const audioFiles = [];
+            zip.forEach((path, entry) => {
+                if (entry.dir || !path.match(/\.(wav|mp3|ogg|flac)$/i)) return;
+                const lower = path.toLowerCase();
+                if (lower.includes('softclicks/')) audioFiles.push({ type: 'softClick', entry });
+                else if (lower.includes('clicks/')) audioFiles.push({ type: 'click', entry });
+                else if (lower.includes('softreleases/')) audioFiles.push({ type: 'softRelease', entry });
+                else if (lower.includes('releases/')) audioFiles.push({ type: 'release', entry });
+            });
+            
+            if (!audioFiles.length) { updateProgress(0, "❌ No audio found"); return; }
+            
+            let loaded = 0;
+            for (const item of audioFiles) {
+                const ab = await item.entry.async("arraybuffer");
+                try {
+                    const audioBuf = await audioCtx.decodeAudioData(ab);
+                    const left = trimSilence(audioBuf.getChannelData(0));
+                    const right = trimSilence(audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : audioBuf.getChannelData(0));
+                    const len = Math.min(left.length, right.length);
+                    const sound = { left: left.slice(0, len), right: right.slice(0, len), length: len };
+                    if (item.type === 'click') clickSounds.push(sound);
+                    else if (item.type === 'softClick') softClickSounds.push(sound);
+                    else if (item.type === 'release') releaseSounds.push(sound);
+                    else if (item.type === 'softRelease') softReleaseSounds.push(sound);
+                } catch(err) {}
+                loaded++;
+                updateProgress((loaded/audioFiles.length)*100, `Decoding...`);
+            }
+            document.getElementById('clickCount').innerText = `Loaded: ${clickSounds.length} Clicks, ${releaseSounds.length} Releases`;
+            updateProgress(100, "✅ Clickpack Ready");
+            setTimeout(() => { document.getElementById('progressContainer').style.display = 'none'; }, 1000);
+        } catch (err) { console.error(err); updateProgress(0, "Error reading ZIP"); }
+    });
+
+    document.getElementById('macroFile').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        outputFileName = file.name.replace(/(\.gdr)?\.json$|\.txt$|\.gdr$|\.mhr$/i, "");
+        let actions = [];
+        let fps = null;
+        try {
+            const ext = file.name.toLowerCase();
+            
+            // --- MHR SUPPORT ---
+            if (ext.endsWith('.mhr') || (ext.endsWith('.json') && file.name.includes('.mhr'))) {
+                updateProgress(0, "Parsing MHR...");
+                const buf = await file.arrayBuffer();
+                let mhrData;
+                
+                // Try JSON Parse direct first (for .mhr.json)
+                try {
+                    const txt = new TextDecoder().decode(buf);
+                    const json = JSON.parse(txt);
+                    // Standard MHR JSON structure
+                    fps = json.meta?.fps || json.fps || 240;
+                    const events = json.events || [];
+                    actions = events.map(ev => ({ 
+                        f: (ev.frame !== undefined) ? ev.frame : ev.f, 
+                        state: (ev.down !== undefined ? ev.down : ev.d) ? 1 : 0 
+                    }));
+                    document.getElementById('status').innerText = `✅ MHR (JSON): ${actions.length} events`;
+                } catch (jsonErr) {
+                    // Not JSON, try Binary MHR
+                     const parsed = parseMHR(buf);
+                     actions = parsed.actions;
+                     fps = parsed.fps;
+                     document.getElementById('status').innerText = `✅ MHR (Binary): ${actions.length} events`;
+                }
+            } 
+            // --- GDR SUPPORT ---
+            else if (ext.endsWith('.gdr')) {
+                updateProgress(0, "Parsing GDR...");
+                const buf = await file.arrayBuffer();
+                const inflated = pako.inflate(new Uint8Array(buf));
+                const decoded = msgpack.decode(inflated);
+                if (decoded.fps || decoded.framerate) fps = decoded.fps || decoded.framerate;
+                const inputs = decoded.inputs || decoded.events || [];
+                inputs.forEach(i => {
+                    if (i.player === 0 || i.p1 === true || i.player === undefined) {
+                        let s = (i.down === true || i.btn === 1 || i.state === 1) ? 1 : 0;
+                        actions.push({ f: i.frame, state: s });
+                    }
+                });
+                document.getElementById('status').innerText = `✅ GDR: ${actions.length} events`;
+            } 
+            // --- TXT / PLAIN JSON ---
+            else {
+                const txt = await file.text();
+                try {
+                    const json = JSON.parse(txt);
+                    if (json.framerate || json.fps) fps = json.framerate || json.fps;
+                    const inputs = json.inputs || json.events || json;
+                    if (Array.isArray(inputs)) {
+                        inputs.forEach(i => {
+                            if (i.player === 0 || i.p1 === true || i.player === undefined) {
+                                let s = (i.down === true || i.btn === 1 || i.state === 1) ? 1 : 0;
+                                actions.push({ f: i.frame, state: s });
+                            }
+                        });
+                        document.getElementById('status').innerText = `✅ JSON: ${actions.length} events`;
+                    }
+                } catch (e) {
+                    const lines = txt.split(/\r?\n/);
+                    if (lines[0] && lines[0].match(/(\d+(\.\d+)?)$/)) fps = parseFloat(lines[0].match(/(\d+(\.\d+)?)$/)[0]);
+                    lines.forEach(l => {
+                        const p = l.trim().split(/\s+/);
+                        if (p.length >= 2 && !isNaN(p[0])) actions.push({ f: parseFloat(p[0]), state: parseInt(p[1]) });
+                    });
+                    document.getElementById('status').innerText = `✅ TXT: ${actions.length} events`;
+                }
+            }
+        } catch (err) { console.error(err); document.getElementById('status').innerText = "❌ Error parsing macro"; return; }
+        macroData = actions;
+        if (fps) document.getElementById('fps').value = fps;
+        do
